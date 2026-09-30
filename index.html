@@ -23,9 +23,12 @@
         /* 导入设置面板 */
         #settings-area { display: none; position: absolute; top: 60px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
         textarea { width: 100%; height: 200px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
-        .btn-small { font-size: 15px; padding: 12px 20px; border: none; border-radius: 8px; color: white; margin-right: 10px; background: #4caf50; }
+        .btn-small { font-size: 14px; padding: 12px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 10px; }
+        .btn-success { background: #4caf50; }
+        .btn-warning { background: #ff9800; }
         .btn-danger { background: #f44336; }
         .tip { font-size: 12px; color: #ff9800; margin-bottom: 5px; background: #fff3e0; padding: 8px; border-radius: 6px; }
+        .btn-group { display: flex; flex-wrap: wrap; gap: 10px; }
     </style>
 </head>
 <body>
@@ -40,16 +43,14 @@
     <div id="settings-area">
         <h3 style="margin-top:0;">批量导入文案</h3>
         <div class="tip">
-            <b>如何自动分类？</b><br>
-            在文案上方加上【分类名】即可。例如：<br>
+            带上【分类名】即可自动分类。例如：<br>
             【励志】<br>
-            今天也要加油呀<br>
-            【搞笑】<br>
-            打工人打工魂
+            今天也要加油呀
         </div>
         <textarea id="import-text" placeholder="长按粘贴..."></textarea>
-        <div style="display: flex;">
-            <button class="btn-small" onclick="importData()">➕ 追加导入</button>
+        <div class="btn-group">
+            <button class="btn-small btn-success" onclick="importData()">➕ 追加导入</button>
+            <button class="btn-small btn-warning" onclick="deleteCurrentCat()">✂️ 删除当前分类</button>
             <button class="btn-small btn-danger" onclick="clearData()">🗑️ 清空所有</button>
         </div>
     </div>
@@ -61,7 +62,6 @@
     </div>
 
     <script>
-        // 数据结构：{ "默认": ["文案1", "文案2"], "励志": ["文案3"] }
         let wenanData = {};
         let currentCat = "默认";
 
@@ -73,7 +73,6 @@
                 wenanData = { "全部": [] };
             }
             
-            // 恢复上次选中的分类
             let savedCat = localStorage.getItem('currentCat');
             if (savedCat && wenanData[savedCat] !== undefined) {
                 currentCat = savedCat;
@@ -110,21 +109,18 @@
 
         function copyNext() {
             if (!wenanData[currentCat] || wenanData[currentCat].length === 0) {
-                document.getElementById('display').innerText = "⚠️ 【" + currentCat + "】分类已经发完啦！请导入新文案。";
+                document.getElementById('display').innerText = "⚠️ 【" + currentCat + "】分类已经发完啦！";
                 return;
             }
             
-            // 提取第一条并删除
             let text = wenanData[currentCat].shift();
             saveData(); 
             
-            // 写入剪贴板
             navigator.clipboard.writeText(text).then(() => {
                 document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
-                renderTabs(); // 更新顶部标签的数量
+                renderTabs(); 
                 updateUI();
             }).catch(err => {
-                // 兼容方案
                 let textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
@@ -144,6 +140,8 @@
         function updateUI() {
             if (wenanData[currentCat]) {
                 document.getElementById('counter').innerText = "当前分类剩余: " + wenanData[currentCat].length + " 条";
+            } else {
+                document.getElementById('counter').innerText = "当前分类剩余: 0 条";
             }
         }
         
@@ -156,22 +154,18 @@
             let rawText = document.getElementById('import-text').value;
             if(!rawText.trim()) return alert("请先粘贴内容！");
             
-            // 按行劈开并去除空格空行
             let lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            
-            let targetCat = currentCat; // 默认导入到当前选中的分类
+            let targetCat = currentCat; 
             let importedCount = 0;
 
             lines.forEach(line => {
-                // 自动识别分类标题：如果这一行被 【】 包含（例如：【搞笑】）
                 let match = line.match(/^【(.*?)】$/);
                 if (match) {
-                    targetCat = match[1]; // 切换目标分类
+                    targetCat = match[1]; 
                     if (!wenanData[targetCat]) {
-                        wenanData[targetCat] = []; // 如果是没有的新分类，自动创建
+                        wenanData[targetCat] = []; 
                     }
                 } else {
-                    // 正常的文案内容
                     if (!wenanData[targetCat]) wenanData[targetCat] = [];
                     wenanData[targetCat].push(line);
                     importedCount++;
@@ -184,6 +178,27 @@
             renderTabs();
             updateUI();
             alert("成功导入 " + importedCount + " 条文案！");
+        }
+        
+        // 新增的删除当前分类功能
+        function deleteCurrentCat() {
+            if(confirm("确定要删除【" + currentCat + "】这个分类吗？\n删除后该分类下如果还有文案也会一并丢失！")) {
+                delete wenanData[currentCat];
+                
+                // 如果所有分类都被删光了，兜底创建一个“全部”分类
+                if(Object.keys(wenanData).length === 0) {
+                    wenanData = { "全部": [] };
+                }
+                
+                // 切换到剩下的第一个分类
+                currentCat = Object.keys(wenanData)[0];
+                
+                saveData();
+                renderTabs();
+                updateUI();
+                document.getElementById('display').innerText = "分类已删除。";
+                toggleSettings(); // 自动收起设置面板
+            }
         }
 
         function clearData() {
