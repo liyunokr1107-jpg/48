@@ -40,15 +40,14 @@
     <!-- 设置区域 -->
     <div id="settings-area">
         <div class="config-box">
-            <h4 style="margin:0 0 10px 0;">🔗 云端数据库绑定 (仅首次填写)</h4>
+            <h4 style="margin:0 0 10px 0;">🔗 云端数据库绑定</h4>
             <input type="text" id="cfg-token" class="config-input" placeholder="填入 GitHub Token (ghp_开头)">
             <input type="text" id="cfg-gist" class="config-input" placeholder="填入 Gist ID">
-            <button class="btn-small btn-dark" onclick="saveConfig()">保存配置并强制同步</button>
+            <button class="btn-small btn-dark" onclick="saveConfig()">保存配置并强制拉取</button>
         </div>
 
         <h3 style="margin-top:0;">导入文案库</h3>
         <textarea id="import-text" placeholder="长按粘贴..."></textarea>
-        
         <div>
             <button class="btn-small btn-success" onclick="importData()">➕ 粘贴导入</button>
             <label for="txt-upload" class="btn-small btn-primary">📁 选择TXT导入</label>
@@ -68,7 +67,6 @@
     <script>
         let wenanData = {};
         let currentCat = null;
-        let isSyncing = false; 
         
         let GITHUB_TOKEN = localStorage.getItem('gh_token') || '';
         let GIST_ID = localStorage.getItem('gh_gist') || '';
@@ -80,17 +78,22 @@
             if(!msg) el.innerText = ''; 
         }
 
-        // 修复点1：去掉触发 CORS 拦截的 Cache-Control 请求头，仅保留时间戳参数
         async function fetchFromCloud() {
             if (!GITHUB_TOKEN || !GIST_ID) return;
             setSyncStatus("☁️ 正在拉取云端数据...");
-            isSyncing = true;
             try {
                 let timestamp = new Date().getTime(); 
                 let res = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${timestamp}`, {
-                    headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                    headers: { 
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${GITHUB_TOKEN}` 
+                    }
                 });
-                if (!res.ok) throw new Error("密钥或ID错误");
+                if (!res.ok) {
+                    if (res.status === 401 || res.status === 403) throw new Error("401 密钥无权限");
+                    if (res.status === 404) throw new Error("404 找不到数据");
+                    throw new Error(res.status);
+                }
                 let data = await res.json();
                 let content = data.files['wenan.json'].content;
                 wenanData = JSON.parse(content || '{}');
@@ -107,36 +110,43 @@
                 updateUI();
                 setSyncStatus(""); 
             } catch (error) {
-                setSyncStatus("❌ 云端拉取失败，请检查密钥", true);
+                setSyncStatus("❌ 拉取失败 (" + error.message + ")", true);
             }
-            isSyncing = false;
         }
 
-        // 修复点2：PATCH 请求自带防缓存属性，去掉了会导致 API 拒绝的任何多余参数和请求头
         async function pushToCloud() {
-            if (!GITHUB_TOKEN || !GIST_ID) return;
+            if (!GITHUB_TOKEN || !GIST_ID) {
+                setSyncStatus("❌ 未配置云端密钥", true);
+                return;
+            }
             setSyncStatus("☁️ 正在同步至云端...");
             try {
-                await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                let res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                     method: 'PATCH',
                     headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${GITHUB_TOKEN}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         files: { 'wenan.json': { content: JSON.stringify(wenanData) } }
                     })
                 });
+                
+                if (!res.ok) {
+                    if (res.status === 401 || res.status === 403) throw new Error("401 密钥无权限");
+                    if (res.status === 404) throw new Error("404 找不到数据");
+                    throw new Error("网络代码 " + res.status);
+                }
                 setSyncStatus("");
             } catch (error) {
-                setSyncStatus("❌ 同步失败，请刷新重试", true);
+                setSyncStatus("❌ 同步失败 (" + error.message + ")", true);
             }
         }
 
         function init() {
             document.getElementById('cfg-token').value = GITHUB_TOKEN;
             document.getElementById('cfg-gist').value = GIST_ID;
-            
             if (GITHUB_TOKEN && GIST_ID) {
                 fetchFromCloud(); 
             } else {
@@ -145,8 +155,9 @@
         }
 
         function saveConfig() {
-            GITHUB_TOKEN = document.getElementById('cfg-token').value.trim();
-            GIST_ID = document.getElementById('cfg-gist').value.trim();
+            // 强制去除首尾可能存在的空格和换行
+            GITHUB_TOKEN = document.getElementById('cfg-token').value.trim().replace(/\s/g, '');
+            GIST_ID = document.getElementById('cfg-gist').value.trim().replace(/\s/g, '');
             localStorage.setItem('gh_token', GITHUB_TOKEN);
             localStorage.setItem('gh_gist', GIST_ID);
             toggleSettings();
@@ -225,7 +236,6 @@
             
             renderTabs(); 
             updateUI();
-            
             pushToCloud(); 
         }
 
