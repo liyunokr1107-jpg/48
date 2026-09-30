@@ -7,8 +7,8 @@
         body { text-align: center; font-family: sans-serif; background: #f4f5f7; margin: 0; padding: 0; }
         
         /* 顶部栏与分类标签 */
-        .header { display: flex; align-items: center; padding: 15px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        #cat-tabs { display: flex; overflow-x: auto; gap: 10px; flex-grow: 1; padding-bottom: 5px; }
+        .header { display: flex; align-items: center; padding: 15px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); min-height: 35px; }
+        #cat-tabs { display: flex; overflow-x: auto; gap: 10px; flex-grow: 1; padding-bottom: 5px; align-items: center; }
         #cat-tabs::-webkit-scrollbar { display: none; }
         .tab-btn { background: #f0f0f0; color: #666; border-radius: 20px; padding: 8px 16px; font-size: 14px; border: none; white-space: nowrap; transition: 0.2s; }
         .tab-btn.active-tab { background: #0066ff; color: white; font-weight: bold; }
@@ -21,7 +21,7 @@
         #display { margin: 30px auto; font-size: 15px; color: #333; min-height: 100px; text-align: left; background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 350px; box-sizing: border-box; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
         
         /* 导入设置面板 */
-        #settings-area { display: none; position: absolute; top: 60px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
+        #settings-area { display: none; position: absolute; top: 65px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
         textarea { width: 100%; height: 120px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
         .btn-small { font-size: 14px; padding: 12px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 5px; }
         .btn-success { background: #4caf50; }
@@ -44,14 +44,12 @@
     <div id="settings-area">
         <h3 style="margin-top:0;">导入文案库</h3>
         <div class="tip">
-            支持直接粘贴文本，或直接选择手机里的 TXT 文件导入（推荐）。自动按【分类名】归类。
+            支持直接粘贴文本，或直接选择手机里的 TXT 文件导入。自动按【分类名】归类。
         </div>
         <textarea id="import-text" placeholder="长按粘贴... 或是点击下方蓝色按钮直接选取TXT文件"></textarea>
         
         <div class="btn-group">
             <button class="btn-small btn-success" onclick="importData()">➕ 粘贴导入</button>
-            
-            <!-- 文件上传模块 -->
             <label for="txt-upload" class="btn-small btn-primary">📁 选择TXT文件</label>
             <input type="file" id="txt-upload" accept=".txt" style="display:none;" onchange="handleFileUpload(event)">
             
@@ -61,28 +59,29 @@
     </div>
 
     <div class="main-area">
-        <div id="counter">当前分类剩余: 0 条</div>
+        <div id="counter">暂无数据</div>
         <button class="copy-btn" onclick="copyNext()">复制下一条</button>
-        <div id="display">等待复制...</div>
+        <div id="display">等待导入...</div>
     </div>
 
     <script>
         let wenanData = {};
-        let currentCat = "默认";
+        let currentCat = null;
 
         function init() {
             let localData = localStorage.getItem('myWenanDict');
             if (localData) {
                 wenanData = JSON.parse(localData);
             } else {
-                wenanData = { "全部": [] };
+                wenanData = {};
             }
             
             let savedCat = localStorage.getItem('currentCat');
             if (savedCat && wenanData[savedCat] !== undefined) {
                 currentCat = savedCat;
             } else {
-                currentCat = Object.keys(wenanData)[0] || "全部";
+                let keys = Object.keys(wenanData);
+                currentCat = keys.length > 0 ? keys[0] : null;
             }
             
             renderTabs();
@@ -91,15 +90,25 @@
 
         function saveData() {
             localStorage.setItem('myWenanDict', JSON.stringify(wenanData));
-            localStorage.setItem('currentCat', currentCat);
+            if (currentCat) {
+                localStorage.setItem('currentCat', currentCat);
+            } else {
+                localStorage.removeItem('currentCat');
+            }
         }
 
         function renderTabs() {
             let tabsHtml = '';
-            for (let cat in wenanData) {
-                let count = wenanData[cat].length;
-                let activeClass = (cat === currentCat) ? 'active-tab' : '';
-                tabsHtml += `<button class="tab-btn ${activeClass}" onclick="switchCat('${cat}')">${cat} (${count})</button>`;
+            let keys = Object.keys(wenanData);
+            
+            if (keys.length === 0) {
+                tabsHtml = '<span style="color:#999; font-size:14px; padding: 5px;">暂无分类，请点击右侧⚙️导入</span>';
+            } else {
+                for (let cat in wenanData) {
+                    let count = wenanData[cat].length;
+                    let activeClass = (cat === currentCat) ? 'active-tab' : '';
+                    tabsHtml += `<button class="tab-btn ${activeClass}" onclick="switchCat('${cat}')">${cat} (${count})</button>`;
+                }
             }
             document.getElementById('cat-tabs').innerHTML = tabsHtml;
         }
@@ -113,8 +122,8 @@
         }
 
         function copyNext() {
-            if (!wenanData[currentCat] || wenanData[currentCat].length === 0) {
-                document.getElementById('display').innerText = "⚠️ 【" + currentCat + "】分类已经发完啦！";
+            if (!currentCat || !wenanData[currentCat] || wenanData[currentCat].length === 0) {
+                document.getElementById('display').innerText = "⚠️ 当前没有可复制的文案！请导入新数据。";
                 return;
             }
             
@@ -143,10 +152,11 @@
         }
 
         function updateUI() {
-            if (wenanData[currentCat]) {
+            if (currentCat && wenanData[currentCat]) {
                 document.getElementById('counter').innerText = "当前分类剩余: " + wenanData[currentCat].length + " 条";
             } else {
-                document.getElementById('counter').innerText = "当前分类剩余: 0 条";
+                document.getElementById('counter').innerText = "暂无数据";
+                document.getElementById('display').innerText = "请先导入文案...";
             }
         }
         
@@ -155,10 +165,9 @@
             el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         }
 
-        // 核心解析逻辑（合并了粘贴和文件的处理）
         function processImport(rawText) {
             let lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            let targetCat = currentCat; 
+            let targetCat = currentCat || "未分类"; 
             let importedCount = 0;
 
             lines.forEach(line => {
@@ -175,22 +184,30 @@
                 }
             });
 
+            // 如果本来是空的状态，导入后自动选中第一个分类
+            if (!currentCat && Object.keys(wenanData).length > 0) {
+                currentCat = Object.keys(wenanData)[0];
+            }
+
             saveData();
             document.getElementById('import-text').value = '';
             toggleSettings(); 
             renderTabs();
             updateUI();
-            alert("成功导入 " + importedCount + " 条文案！");
+            if(importedCount > 0) {
+                alert("成功导入 " + importedCount + " 条文案！");
+                if (document.getElementById('display').innerText === "请先导入文案...") {
+                    document.getElementById('display').innerText = "导入成功，等待复制...";
+                }
+            }
         }
 
-        // 处理粘贴导入
         function importData() {
             let rawText = document.getElementById('import-text').value;
             if(!rawText.trim()) return alert("请先粘贴内容！");
             processImport(rawText);
         }
 
-        // 处理TXT文件导入
         function handleFileUpload(event) {
             let file = event.target.files[0];
             if (!file) return;
@@ -199,38 +216,45 @@
             reader.onload = function(e) {
                 let rawText = e.target.result;
                 processImport(rawText);
-                event.target.value = ''; // 清空选择，允许重复传同一个文件
+                event.target.value = ''; 
             };
             reader.onerror = function() {
                 alert("文件读取失败！");
             };
-            // 以 UTF-8 编码读取
             reader.readAsText(file, 'UTF-8');
         }
         
         function deleteCurrentCat() {
+            if (!currentCat) return alert("当前没有可删除的分类！");
+            
             if(confirm("确定要删除【" + currentCat + "】这个分类吗？\n删除后该分类下如果还有文案也会一并丢失！")) {
                 delete wenanData[currentCat];
-                if(Object.keys(wenanData).length === 0) {
-                    wenanData = { "全部": [] };
-                }
-                currentCat = Object.keys(wenanData)[0];
+                
+                let keys = Object.keys(wenanData);
+                currentCat = keys.length > 0 ? keys[0] : null;
+                
                 saveData();
                 renderTabs();
                 updateUI();
-                document.getElementById('display').innerText = "分类已删除。";
+                
+                if (!currentCat) {
+                    document.getElementById('display').innerText = "所有分类已清空。";
+                } else {
+                    document.getElementById('display').innerText = "分类已删除，已自动切换到【" + currentCat + "】";
+                }
+                
                 toggleSettings(); 
             }
         }
 
         function clearData() {
             if(confirm("确定要清空手机里剩下的所有文案吗？(不可恢复)")) {
-                wenanData = { "全部": [] };
-                currentCat = "全部";
+                wenanData = {};
+                currentCat = null;
                 saveData();
                 renderTabs();
                 updateUI();
-                document.getElementById('display').innerText = "已清空重置。";
+                document.getElementById('display').innerText = "已彻底清空。";
                 toggleSettings();
             }
         }
