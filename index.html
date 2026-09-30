@@ -68,7 +68,7 @@
     <script>
         let wenanData = {};
         let currentCat = null;
-        let isSyncing = false; // 防止重复同步状态冲突
+        let isSyncing = false; 
         
         let GITHUB_TOKEN = localStorage.getItem('gh_token') || '';
         let GIST_ID = localStorage.getItem('gh_gist') || '';
@@ -80,15 +80,15 @@
             if(!msg) el.innerText = ''; 
         }
 
-        // 核心：强制拉取云端（带时间戳击穿缓存）
+        // 修复点1：去掉触发 CORS 拦截的 Cache-Control 请求头，仅保留时间戳参数
         async function fetchFromCloud() {
             if (!GITHUB_TOKEN || !GIST_ID) return;
             setSyncStatus("☁️ 正在拉取云端数据...");
             isSyncing = true;
             try {
-                let timestamp = new Date().getTime(); // 阻止手机浏览器缓存
+                let timestamp = new Date().getTime(); 
                 let res = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${timestamp}`, {
-                    headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Cache-Control': 'no-store' }
+                    headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
                 });
                 if (!res.ok) throw new Error("密钥或ID错误");
                 let data = await res.json();
@@ -112,18 +112,16 @@
             isSyncing = false;
         }
 
-        // 核心：推送到云端（带时间戳）
+        // 修复点2：PATCH 请求自带防缓存属性，去掉了会导致 API 拒绝的任何多余参数和请求头
         async function pushToCloud() {
             if (!GITHUB_TOKEN || !GIST_ID) return;
             setSyncStatus("☁️ 正在同步至云端...");
             try {
-                let timestamp = new Date().getTime();
-                await fetch(`https://api.github.com/gists/${GIST_ID}?t=${timestamp}`, {
+                await fetch(`https://api.github.com/gists/${GIST_ID}`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json',
-                        'Cache-Control': 'no-store'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         files: { 'wenan.json': { content: JSON.stringify(wenanData) } }
@@ -178,7 +176,6 @@
             document.getElementById('display').innerText = "已切换到【" + cat + "】，等待复制...";
         }
 
-        // 终极安全的复制方法：彻底解决手机端报错锁死按钮的问题
         function safeFallbackCopy(text, successMsg) {
             try {
                 let textArea = document.createElement("textarea");
@@ -194,7 +191,7 @@
                 document.getElementById('display').innerText = successMsg;
                 document.body.removeChild(textArea);
             } catch (e) {
-                document.getElementById('display').innerText = "⚠️ 自动复制被手机拦截，请手动长按下方文本复制：\n\n" + text;
+                document.getElementById('display').innerText = "⚠️ 自动复制拦截，请长按下方文本复制：\n\n" + text;
             }
         }
 
@@ -204,7 +201,6 @@
                 return;
             }
             
-            // 【先斩后奏】直接从本地提取，0毫秒内完成复制，绝不等待云端
             let text = wenanData[currentCat].shift();
             let successMsg = "✅ 已复制并移除：\n\n" + text;
 
@@ -227,11 +223,9 @@
                 safeFallbackCopy(text, successMsg);
             }
             
-            // 本地立马刷新UI显示剩余数量
             renderTabs(); 
             updateUI();
             
-            // 【静默同步】把扣除后的最新结果通过网络告诉云端
             pushToCloud(); 
         }
 
