@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <title>极简发帖</title>
+    <style>
+        body { text-align: center; font-family: sans-serif; background: #f4f5f7; margin: 0; padding: 0; }
+        
+        /* 顶部栏与分类标签 */
+        .header { display: flex; align-items: center; padding: 15px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        #cat-tabs { display: flex; overflow-x: auto; gap: 10px; flex-grow: 1; padding-bottom: 5px; }
+        #cat-tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { background: #f0f0f0; color: #666; border-radius: 20px; padding: 8px 16px; font-size: 14px; border: none; white-space: nowrap; transition: 0.2s; }
+        .tab-btn.active-tab { background: #0066ff; color: white; font-weight: bold; }
+        #settings-btn { background: none; color: #888; border: none; font-size: 24px; padding: 0 0 0 10px; }
+
+        /* 主区域 */
+        .main-area { margin-top: 10vh; padding: 20px; }
+        #counter { color: #888; margin-bottom: 20px; font-size: 16px; }
+        .copy-btn { font-size: 20px; padding: 20px 40px; background: #0066ff; color: white; border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,102,255,0.3); width: 90%; max-width: 350px; font-weight: bold; }
+        #display { margin: 30px auto; font-size: 15px; color: #333; min-height: 100px; text-align: left; background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 350px; box-sizing: border-box; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        
+        /* 导入设置面板 */
+        #settings-area { display: none; position: absolute; top: 60px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
+        textarea { width: 100%; height: 200px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
+        .btn-small { font-size: 15px; padding: 12px 20px; border: none; border-radius: 8px; color: white; margin-right: 10px; background: #4caf50; }
+        .btn-danger { background: #f44336; }
+        .tip { font-size: 12px; color: #ff9800; margin-bottom: 5px; background: #fff3e0; padding: 8px; border-radius: 6px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div id="cat-tabs">
+            <!-- 标签动态生成 -->
+        </div>
+        <button id="settings-btn" onclick="toggleSettings()">⚙️</button>
+    </div>
+
+    <!-- 隐藏的设置区域 -->
+    <div id="settings-area">
+        <h3 style="margin-top:0;">批量导入文案</h3>
+        <div class="tip">
+            <b>如何自动分类？</b><br>
+            在文案上方加上【分类名】即可。例如：<br>
+            【励志】<br>
+            今天也要加油呀<br>
+            【搞笑】<br>
+            打工人打工魂
+        </div>
+        <textarea id="import-text" placeholder="长按粘贴..."></textarea>
+        <div style="display: flex;">
+            <button class="btn-small" onclick="importData()">➕ 追加导入</button>
+            <button class="btn-small btn-danger" onclick="clearData()">🗑️ 清空所有</button>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <div id="counter">当前分类剩余: 0 条</div>
+        <button class="copy-btn" onclick="copyNext()">复制下一条</button>
+        <div id="display">等待复制...</div>
+    </div>
+
+    <script>
+        // 数据结构：{ "默认": ["文案1", "文案2"], "励志": ["文案3"] }
+        let wenanData = {};
+        let currentCat = "默认";
+
+        function init() {
+            let localData = localStorage.getItem('myWenanDict');
+            if (localData) {
+                wenanData = JSON.parse(localData);
+            } else {
+                wenanData = { "全部": [] };
+            }
+            
+            // 恢复上次选中的分类
+            let savedCat = localStorage.getItem('currentCat');
+            if (savedCat && wenanData[savedCat] !== undefined) {
+                currentCat = savedCat;
+            } else {
+                currentCat = Object.keys(wenanData)[0] || "全部";
+            }
+            
+            renderTabs();
+            updateUI();
+        }
+
+        function saveData() {
+            localStorage.setItem('myWenanDict', JSON.stringify(wenanData));
+            localStorage.setItem('currentCat', currentCat);
+        }
+
+        function renderTabs() {
+            let tabsHtml = '';
+            for (let cat in wenanData) {
+                let count = wenanData[cat].length;
+                let activeClass = (cat === currentCat) ? 'active-tab' : '';
+                tabsHtml += `<button class="tab-btn ${activeClass}" onclick="switchCat('${cat}')">${cat} (${count})</button>`;
+            }
+            document.getElementById('cat-tabs').innerHTML = tabsHtml;
+        }
+
+        function switchCat(cat) {
+            currentCat = cat;
+            saveData();
+            renderTabs();
+            updateUI();
+            document.getElementById('display').innerText = "已切换到【" + cat + "】，等待复制...";
+        }
+
+        function copyNext() {
+            if (!wenanData[currentCat] || wenanData[currentCat].length === 0) {
+                document.getElementById('display').innerText = "⚠️ 【" + currentCat + "】分类已经发完啦！请导入新文案。";
+                return;
+            }
+            
+            // 提取第一条并删除
+            let text = wenanData[currentCat].shift();
+            saveData(); 
+            
+            // 写入剪贴板
+            navigator.clipboard.writeText(text).then(() => {
+                document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
+                renderTabs(); // 更新顶部标签的数量
+                updateUI();
+            }).catch(err => {
+                // 兼容方案
+                let textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
+                    renderTabs();
+                    updateUI();
+                } catch (err) {
+                    alert("复制失败，请重试");
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        function updateUI() {
+            if (wenanData[currentCat]) {
+                document.getElementById('counter').innerText = "当前分类剩余: " + wenanData[currentCat].length + " 条";
+            }
+        }
+        
+        function toggleSettings() {
+            let el = document.getElementById('settings-area');
+            el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+        }
+
+        function importData() {
+            let rawText = document.getElementById('import-text').value;
+            if(!rawText.trim()) return alert("请先粘贴内容！");
+            
+            // 按行劈开并去除空格空行
+            let lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            let targetCat = currentCat; // 默认导入到当前选中的分类
+            let importedCount = 0;
+
+            lines.forEach(line => {
+                // 自动识别分类标题：如果这一行被 【】 包含（例如：【搞笑】）
+                let match = line.match(/^【(.*?)】$/);
+                if (match) {
+                    targetCat = match[1]; // 切换目标分类
+                    if (!wenanData[targetCat]) {
+                        wenanData[targetCat] = []; // 如果是没有的新分类，自动创建
+                    }
+                } else {
+                    // 正常的文案内容
+                    if (!wenanData[targetCat]) wenanData[targetCat] = [];
+                    wenanData[targetCat].push(line);
+                    importedCount++;
+                }
+            });
+
+            saveData();
+            document.getElementById('import-text').value = '';
+            toggleSettings(); 
+            renderTabs();
+            updateUI();
+            alert("成功导入 " + importedCount + " 条文案！");
+        }
+
+        function clearData() {
+            if(confirm("确定要清空手机里剩下的所有文案吗？(不可恢复)")) {
+                wenanData = { "全部": [] };
+                currentCat = "全部";
+                saveData();
+                renderTabs();
+                updateUI();
+                document.getElementById('display').innerText = "已清空重置。";
+                toggleSettings();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
