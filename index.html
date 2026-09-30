@@ -2,107 +2,169 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>极简发帖</title>
+    <title>云端发帖神器</title>
     <style>
         body { text-align: center; font-family: sans-serif; background: #f4f5f7; margin: 0; padding: 0; }
-        
-        /* 顶部栏与分类标签 */
         .header { display: flex; align-items: center; padding: 15px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05); min-height: 35px; }
         #cat-tabs { display: flex; overflow-x: auto; gap: 10px; flex-grow: 1; padding-bottom: 5px; align-items: center; }
         #cat-tabs::-webkit-scrollbar { display: none; }
         .tab-btn { background: #f0f0f0; color: #666; border-radius: 20px; padding: 8px 16px; font-size: 14px; border: none; white-space: nowrap; transition: 0.2s; }
         .tab-btn.active-tab { background: #0066ff; color: white; font-weight: bold; }
         #settings-btn { background: none; color: #888; border: none; font-size: 24px; padding: 0 0 0 10px; }
-
-        /* 主区域 */
-        .main-area { margin-top: 10vh; padding: 20px; }
-        #counter { color: #888; margin-bottom: 20px; font-size: 16px; }
-        .copy-btn { font-size: 20px; padding: 20px 40px; background: #0066ff; color: white; border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,102,255,0.3); width: 90%; max-width: 350px; font-weight: bold; }
-        #display { margin: 30px auto; font-size: 15px; color: #333; min-height: 100px; text-align: left; background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 350px; box-sizing: border-box; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .main-area { margin-top: 5vh; padding: 20px; }
+        #counter { color: #888; margin-bottom: 10px; font-size: 16px; }
+        #sync-status { color: #ff9800; font-size: 12px; margin-bottom: 15px; height: 16px; font-weight: bold; }
+        .copy-btn { font-size: 20px; padding: 20px 40px; background: #0066ff; color: white; border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,102,255,0.3); width: 90%; max-width: 350px; font-weight: bold; transition: 0.2s; }
+        .copy-btn:disabled { background: #cccccc; box-shadow: none; }
+        #display { margin: 20px auto; font-size: 15px; color: #333; min-height: 100px; text-align: left; background: white; padding: 20px; border-radius: 12px; width: 90%; max-width: 350px; box-sizing: border-box; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
         
-        /* 导入设置面板 */
-        #settings-area { display: none; position: absolute; top: 65px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
-        textarea { width: 100%; height: 120px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
-        .btn-small { font-size: 14px; padding: 12px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 5px; }
+        #settings-area { display: none; position: absolute; top: 65px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
+        textarea { width: 100%; height: 100px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
+        input.config-input { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .btn-small { font-size: 14px; padding: 10px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 5px; cursor: pointer; }
         .btn-success { background: #4caf50; }
-        .btn-primary { background: #2196f3; display: inline-block; text-align: center; cursor: pointer; }
+        .btn-primary { background: #2196f3; display: inline-block; text-align: center;}
         .btn-warning { background: #ff9800; }
         .btn-danger { background: #f44336; }
+        .btn-dark { background: #333; }
         .tip { font-size: 12px; color: #ff9800; margin-bottom: 5px; background: #fff3e0; padding: 8px; border-radius: 6px; }
-        .btn-group { display: flex; flex-wrap: wrap; gap: 10px; }
+        .config-box { background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #eee; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div id="cat-tabs">
-            <!-- 标签动态生成 -->
-        </div>
+        <div id="cat-tabs"></div>
         <button id="settings-btn" onclick="toggleSettings()">⚙️</button>
     </div>
 
-    <!-- 隐藏的设置区域 -->
+    <!-- 设置区域 -->
     <div id="settings-area">
-        <h3 style="margin-top:0;">导入文案库</h3>
-        <div class="tip">
-            支持直接粘贴文本，或直接选择手机里的 TXT 文件导入。自动按【分类名】归类。
+        <div class="config-box">
+            <h4 style="margin:0 0 10px 0;">🔗 云端数据库绑定 (仅首次填写)</h4>
+            <input type="text" id="cfg-token" class="config-input" placeholder="填入 GitHub Token (ghp_开头)">
+            <input type="text" id="cfg-gist" class="config-input" placeholder="填入 Gist ID">
+            <button class="btn-small btn-dark" onclick="saveConfig()">保存云端配置并拉取数据</button>
         </div>
-        <textarea id="import-text" placeholder="长按粘贴... 或是点击下方蓝色按钮直接选取TXT文件"></textarea>
+
+        <h3 style="margin-top:0;">导入文案库</h3>
+        <div class="tip">支持粘贴文本或选择 TXT 文件，导入后自动同步至云端。</div>
+        <textarea id="import-text" placeholder="长按粘贴..."></textarea>
         
-        <div class="btn-group">
+        <div>
             <button class="btn-small btn-success" onclick="importData()">➕ 粘贴导入</button>
-            <label for="txt-upload" class="btn-small btn-primary">📁 选择TXT文件</label>
+            <label for="txt-upload" class="btn-small btn-primary">📁 选择TXT导入</label>
             <input type="file" id="txt-upload" accept=".txt" style="display:none;" onchange="handleFileUpload(event)">
-            
             <button class="btn-small btn-warning" onclick="deleteCurrentCat()">✂️ 删当前分类</button>
-            <button class="btn-small btn-danger" onclick="clearData()">🗑️ 清空所有</button>
+            <button class="btn-small btn-danger" onclick="clearData()">🗑️ 清空云端</button>
         </div>
     </div>
 
     <div class="main-area">
         <div id="counter">暂无数据</div>
-        <button class="copy-btn" onclick="copyNext()">复制下一条</button>
-        <div id="display">等待导入...</div>
+        <div id="sync-status"></div>
+        <button class="copy-btn" id="main-btn" onclick="copyNext()">复制下一条</button>
+        <div id="display">请先点击右上角⚙️绑定云端...</div>
     </div>
 
     <script>
         let wenanData = {};
         let currentCat = null;
+        
+        // 获取本地保存的密钥
+        let GITHUB_TOKEN = localStorage.getItem('gh_token') || '';
+        let GIST_ID = localStorage.getItem('gh_gist') || '';
 
-        function init() {
-            let localData = localStorage.getItem('myWenanDict');
-            if (localData) {
-                wenanData = JSON.parse(localData);
-            } else {
-                wenanData = {};
-            }
-            
-            let savedCat = localStorage.getItem('currentCat');
-            if (savedCat && wenanData[savedCat] !== undefined) {
-                currentCat = savedCat;
-            } else {
-                let keys = Object.keys(wenanData);
-                currentCat = keys.length > 0 ? keys[0] : null;
-            }
-            
-            renderTabs();
-            updateUI();
+        function setSyncStatus(msg, isError=false) {
+            let el = document.getElementById('sync-status');
+            el.innerText = msg;
+            el.style.color = isError ? '#f44336' : '#ff9800';
+            if(!msg) el.innerText = ''; 
         }
 
-        function saveData() {
-            localStorage.setItem('myWenanDict', JSON.stringify(wenanData));
-            if (currentCat) {
-                localStorage.setItem('currentCat', currentCat);
-            } else {
-                localStorage.removeItem('currentCat');
+        function lockBtn(lock) {
+            document.getElementById('main-btn').disabled = lock;
+        }
+
+        // 核心：从云端拉取数据
+        async function fetchFromCloud() {
+            if (!GITHUB_TOKEN || !GIST_ID) return;
+            setSyncStatus("☁️ 正在同步云端数据...");
+            lockBtn(true);
+            try {
+                let res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                    headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                });
+                if (!res.ok) throw new Error("密钥或ID错误");
+                let data = await res.json();
+                let content = data.files['wenan.json'].content;
+                wenanData = JSON.parse(content || '{}');
+                
+                // 恢复上次选中的分类
+                let savedCat = localStorage.getItem('currentCat');
+                if (savedCat && wenanData[savedCat] !== undefined) {
+                    currentCat = savedCat;
+                } else {
+                    let keys = Object.keys(wenanData);
+                    currentCat = keys.length > 0 ? keys[0] : null;
+                }
+                
+                renderTabs();
+                updateUI();
+                setSyncStatus(""); 
+            } catch (error) {
+                setSyncStatus("❌ 云端拉取失败，请检查密钥", true);
             }
+            lockBtn(false);
+        }
+
+        // 核心：将修改推送到云端
+        async function pushToCloud() {
+            if (!GITHUB_TOKEN || !GIST_ID) return;
+            setSyncStatus("☁️ 正在保存至云端...");
+            lockBtn(true);
+            try {
+                await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        files: { 'wenan.json': { content: JSON.stringify(wenanData) } }
+                    })
+                });
+                setSyncStatus("");
+            } catch (error) {
+                setSyncStatus("❌ 云端保存失败", true);
+            }
+            lockBtn(false);
+        }
+
+        function init() {
+            document.getElementById('cfg-token').value = GITHUB_TOKEN;
+            document.getElementById('cfg-gist').value = GIST_ID;
+            
+            if (GITHUB_TOKEN && GIST_ID) {
+                fetchFromCloud(); // 启动时自动从云端获取最新数据
+            } else {
+                renderTabs();
+            }
+        }
+
+        function saveConfig() {
+            GITHUB_TOKEN = document.getElementById('cfg-token').value.trim();
+            GIST_ID = document.getElementById('cfg-gist').value.trim();
+            localStorage.setItem('gh_token', GITHUB_TOKEN);
+            localStorage.setItem('gh_gist', GIST_ID);
+            toggleSettings();
+            fetchFromCloud();
         }
 
         function renderTabs() {
             let tabsHtml = '';
             let keys = Object.keys(wenanData);
-            
             if (keys.length === 0) {
-                tabsHtml = '<span style="color:#999; font-size:14px; padding: 5px;">暂无分类，请点击右侧⚙️导入</span>';
+                tabsHtml = '<span style="color:#999; font-size:14px; padding: 5px;">暂无分类，请导入数据</span>';
             } else {
                 for (let cat in wenanData) {
                     let count = wenanData[cat].length;
@@ -115,40 +177,42 @@
 
         function switchCat(cat) {
             currentCat = cat;
-            saveData();
+            if (currentCat) localStorage.setItem('currentCat', currentCat);
             renderTabs();
             updateUI();
             document.getElementById('display').innerText = "已切换到【" + cat + "】，等待复制...";
         }
 
-        function copyNext() {
+        async function copyNext() {
             if (!currentCat || !wenanData[currentCat] || wenanData[currentCat].length === 0) {
-                document.getElementById('display').innerText = "⚠️ 当前没有可复制的文案！请导入新数据。";
+                document.getElementById('display').innerText = "⚠️ 当前分类已空！请拉取或导入。";
                 return;
             }
             
-            let text = wenanData[currentCat].shift();
-            saveData(); 
+            // 复制前最好先拉取一次最新云端数据，防止别的手机发过了
+            await fetchFromCloud(); 
+            if(wenanData[currentCat].length === 0) return; // 再次检查
+
+            let text = wenanData[currentCat].shift(); // 删掉第一条
             
+            // 写入剪贴板
             navigator.clipboard.writeText(text).then(() => {
                 document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
-                renderTabs(); 
-                updateUI();
             }).catch(err => {
                 let textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
                 textArea.select();
-                try {
-                    document.execCommand('copy');
-                    document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
-                    renderTabs();
-                    updateUI();
-                } catch (err) {
-                    alert("复制失败，请重试");
-                }
+                document.execCommand('copy');
+                document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
                 document.body.removeChild(textArea);
             });
+            
+            renderTabs(); 
+            updateUI();
+            
+            // 后台静默推送删除后的数据到云端
+            pushToCloud(); 
         }
 
         function updateUI() {
@@ -156,7 +220,7 @@
                 document.getElementById('counter').innerText = "当前分类剩余: " + wenanData[currentCat].length + " 条";
             } else {
                 document.getElementById('counter').innerText = "暂无数据";
-                document.getElementById('display').innerText = "请先导入文案...";
+                if(GITHUB_TOKEN) document.getElementById('display').innerText = "等待操作...";
             }
         }
         
@@ -165,7 +229,7 @@
             el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         }
 
-        function processImport(rawText) {
+        async function processImport(rawText) {
             let lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
             let targetCat = currentCat || "未分类"; 
             let importedCount = 0;
@@ -174,9 +238,7 @@
                 let match = line.match(/^【(.*?)】$/);
                 if (match) {
                     targetCat = match[1]; 
-                    if (!wenanData[targetCat]) {
-                        wenanData[targetCat] = []; 
-                    }
+                    if (!wenanData[targetCat]) wenanData[targetCat] = []; 
                 } else {
                     if (!wenanData[targetCat]) wenanData[targetCat] = [];
                     wenanData[targetCat].push(line);
@@ -184,21 +246,20 @@
                 }
             });
 
-            // 如果本来是空的状态，导入后自动选中第一个分类
             if (!currentCat && Object.keys(wenanData).length > 0) {
                 currentCat = Object.keys(wenanData)[0];
             }
 
-            saveData();
             document.getElementById('import-text').value = '';
             toggleSettings(); 
             renderTabs();
             updateUI();
+            
             if(importedCount > 0) {
-                alert("成功导入 " + importedCount + " 条文案！");
-                if (document.getElementById('display').innerText === "请先导入文案...") {
-                    document.getElementById('display').innerText = "导入成功，等待复制...";
-                }
+                document.getElementById('display').innerText = "导入成功，正在保存至云端...";
+                await pushToCloud();
+                alert("成功导入并同步 " + importedCount + " 条文案！");
+                document.getElementById('display').innerText = "同步完成，等待复制...";
             }
         }
 
@@ -211,50 +272,36 @@
         function handleFileUpload(event) {
             let file = event.target.files[0];
             if (!file) return;
-
             let reader = new FileReader();
             reader.onload = function(e) {
-                let rawText = e.target.result;
-                processImport(rawText);
+                processImport(e.target.result);
                 event.target.value = ''; 
-            };
-            reader.onerror = function() {
-                alert("文件读取失败！");
             };
             reader.readAsText(file, 'UTF-8');
         }
         
-        function deleteCurrentCat() {
+        async function deleteCurrentCat() {
             if (!currentCat) return alert("当前没有可删除的分类！");
-            
-            if(confirm("确定要删除【" + currentCat + "】这个分类吗？\n删除后该分类下如果还有文案也会一并丢失！")) {
+            if(confirm("确定要删除【" + currentCat + "】并同步到云端吗？")) {
                 delete wenanData[currentCat];
-                
                 let keys = Object.keys(wenanData);
                 currentCat = keys.length > 0 ? keys[0] : null;
-                
-                saveData();
                 renderTabs();
                 updateUI();
-                
-                if (!currentCat) {
-                    document.getElementById('display').innerText = "所有分类已清空。";
-                } else {
-                    document.getElementById('display').innerText = "分类已删除，已自动切换到【" + currentCat + "】";
-                }
-                
+                await pushToCloud();
                 toggleSettings(); 
             }
         }
 
-        function clearData() {
-            if(confirm("确定要清空手机里剩下的所有文案吗？(不可恢复)")) {
+        async function clearData() {
+            if(confirm("确定要清空云端所有文案吗？(不可恢复)")) {
                 wenanData = {};
                 currentCat = null;
-                saveData();
                 renderTabs();
                 updateUI();
-                document.getElementById('display').innerText = "已彻底清空。";
+                document.getElementById('display').innerText = "正在清空云端...";
+                await pushToCloud();
+                document.getElementById('display').innerText = "云端已彻底清空。";
                 toggleSettings();
             }
         }
