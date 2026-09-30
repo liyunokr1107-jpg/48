@@ -22,9 +22,10 @@
         
         /* 导入设置面板 */
         #settings-area { display: none; position: absolute; top: 60px; left: 0; right: 0; background: white; padding: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); z-index: 100; text-align: left; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
-        textarea { width: 100%; height: 200px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
-        .btn-small { font-size: 14px; padding: 12px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 10px; }
+        textarea { width: 100%; height: 120px; padding: 12px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 8px; margin: 10px 0; font-size: 14px; resize: none; }
+        .btn-small { font-size: 14px; padding: 12px 15px; border: none; border-radius: 8px; color: white; margin-bottom: 5px; }
         .btn-success { background: #4caf50; }
+        .btn-primary { background: #2196f3; display: inline-block; text-align: center; cursor: pointer; }
         .btn-warning { background: #ff9800; }
         .btn-danger { background: #f44336; }
         .tip { font-size: 12px; color: #ff9800; margin-bottom: 5px; background: #fff3e0; padding: 8px; border-radius: 6px; }
@@ -41,16 +42,20 @@
 
     <!-- 隐藏的设置区域 -->
     <div id="settings-area">
-        <h3 style="margin-top:0;">批量导入文案</h3>
+        <h3 style="margin-top:0;">导入文案库</h3>
         <div class="tip">
-            带上【分类名】即可自动分类。例如：<br>
-            【励志】<br>
-            今天也要加油呀
+            支持直接粘贴文本，或直接选择手机里的 TXT 文件导入（推荐）。自动按【分类名】归类。
         </div>
-        <textarea id="import-text" placeholder="长按粘贴..."></textarea>
+        <textarea id="import-text" placeholder="长按粘贴... 或是点击下方蓝色按钮直接选取TXT文件"></textarea>
+        
         <div class="btn-group">
-            <button class="btn-small btn-success" onclick="importData()">➕ 追加导入</button>
-            <button class="btn-small btn-warning" onclick="deleteCurrentCat()">✂️ 删除当前分类</button>
+            <button class="btn-small btn-success" onclick="importData()">➕ 粘贴导入</button>
+            
+            <!-- 文件上传模块 -->
+            <label for="txt-upload" class="btn-small btn-primary">📁 选择TXT文件</label>
+            <input type="file" id="txt-upload" accept=".txt" style="display:none;" onchange="handleFileUpload(event)">
+            
+            <button class="btn-small btn-warning" onclick="deleteCurrentCat()">✂️ 删当前分类</button>
             <button class="btn-small btn-danger" onclick="clearData()">🗑️ 清空所有</button>
         </div>
     </div>
@@ -150,10 +155,8 @@
             el.style.display = (el.style.display === 'block') ? 'none' : 'block';
         }
 
-        function importData() {
-            let rawText = document.getElementById('import-text').value;
-            if(!rawText.trim()) return alert("请先粘贴内容！");
-            
+        // 核心解析逻辑（合并了粘贴和文件的处理）
+        function processImport(rawText) {
             let lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
             let targetCat = currentCat; 
             let importedCount = 0;
@@ -179,25 +182,44 @@
             updateUI();
             alert("成功导入 " + importedCount + " 条文案！");
         }
+
+        // 处理粘贴导入
+        function importData() {
+            let rawText = document.getElementById('import-text').value;
+            if(!rawText.trim()) return alert("请先粘贴内容！");
+            processImport(rawText);
+        }
+
+        // 处理TXT文件导入
+        function handleFileUpload(event) {
+            let file = event.target.files[0];
+            if (!file) return;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let rawText = e.target.result;
+                processImport(rawText);
+                event.target.value = ''; // 清空选择，允许重复传同一个文件
+            };
+            reader.onerror = function() {
+                alert("文件读取失败！");
+            };
+            // 以 UTF-8 编码读取
+            reader.readAsText(file, 'UTF-8');
+        }
         
-        // 新增的删除当前分类功能
         function deleteCurrentCat() {
             if(confirm("确定要删除【" + currentCat + "】这个分类吗？\n删除后该分类下如果还有文案也会一并丢失！")) {
                 delete wenanData[currentCat];
-                
-                // 如果所有分类都被删光了，兜底创建一个“全部”分类
                 if(Object.keys(wenanData).length === 0) {
                     wenanData = { "全部": [] };
                 }
-                
-                // 切换到剩下的第一个分类
                 currentCat = Object.keys(wenanData)[0];
-                
                 saveData();
                 renderTabs();
                 updateUI();
                 document.getElementById('display').innerText = "分类已删除。";
-                toggleSettings(); // 自动收起设置面板
+                toggleSettings(); 
             }
         }
 
