@@ -43,11 +43,10 @@
             <h4 style="margin:0 0 10px 0;">🔗 云端数据库绑定 (仅首次填写)</h4>
             <input type="text" id="cfg-token" class="config-input" placeholder="填入 GitHub Token (ghp_开头)">
             <input type="text" id="cfg-gist" class="config-input" placeholder="填入 Gist ID">
-            <button class="btn-small btn-dark" onclick="saveConfig()">保存云端配置并拉取数据</button>
+            <button class="btn-small btn-dark" onclick="saveConfig()">保存配置并强制同步</button>
         </div>
 
         <h3 style="margin-top:0;">导入文案库</h3>
-        <div class="tip">支持粘贴文本或选择 TXT 文件，导入后自动同步至云端。</div>
         <textarea id="import-text" placeholder="长按粘贴..."></textarea>
         
         <div>
@@ -69,8 +68,8 @@
     <script>
         let wenanData = {};
         let currentCat = null;
+        let isSyncing = false; // 防止重复同步状态冲突
         
-        // 获取本地保存的密钥
         let GITHUB_TOKEN = localStorage.getItem('gh_token') || '';
         let GIST_ID = localStorage.getItem('gh_gist') || '';
 
@@ -81,25 +80,21 @@
             if(!msg) el.innerText = ''; 
         }
 
-        function lockBtn(lock) {
-            document.getElementById('main-btn').disabled = lock;
-        }
-
-        // 核心：从云端拉取数据
+        // 核心：强制拉取云端（带时间戳击穿缓存）
         async function fetchFromCloud() {
             if (!GITHUB_TOKEN || !GIST_ID) return;
-            setSyncStatus("☁️ 正在同步云端数据...");
-            lockBtn(true);
+            setSyncStatus("☁️ 正在拉取云端数据...");
+            isSyncing = true;
             try {
-                let res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-                    headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+                let timestamp = new Date().getTime(); // 阻止手机浏览器缓存
+                let res = await fetch(`https://api.github.com/gists/${GIST_ID}?t=${timestamp}`, {
+                    headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Cache-Control': 'no-store' }
                 });
                 if (!res.ok) throw new Error("密钥或ID错误");
                 let data = await res.json();
                 let content = data.files['wenan.json'].content;
                 wenanData = JSON.parse(content || '{}');
                 
-                // 恢复上次选中的分类
                 let savedCat = localStorage.getItem('currentCat');
                 if (savedCat && wenanData[savedCat] !== undefined) {
                     currentCat = savedCat;
@@ -114,20 +109,21 @@
             } catch (error) {
                 setSyncStatus("❌ 云端拉取失败，请检查密钥", true);
             }
-            lockBtn(false);
+            isSyncing = false;
         }
 
-        // 核心：将修改推送到云端
+        // 核心：推送到云端（带时间戳）
         async function pushToCloud() {
             if (!GITHUB_TOKEN || !GIST_ID) return;
-            setSyncStatus("☁️ 正在保存至云端...");
-            lockBtn(true);
+            setSyncStatus("☁️ 正在同步至云端...");
             try {
-                await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+                let timestamp = new Date().getTime();
+                await fetch(`https://api.github.com/gists/${GIST_ID}?t=${timestamp}`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-store'
                     },
                     body: JSON.stringify({
                         files: { 'wenan.json': { content: JSON.stringify(wenanData) } }
@@ -135,9 +131,8 @@
                 });
                 setSyncStatus("");
             } catch (error) {
-                setSyncStatus("❌ 云端保存失败", true);
+                setSyncStatus("❌ 同步失败，请刷新重试", true);
             }
-            lockBtn(false);
         }
 
         function init() {
@@ -145,7 +140,7 @@
             document.getElementById('cfg-gist').value = GIST_ID;
             
             if (GITHUB_TOKEN && GIST_ID) {
-                fetchFromCloud(); // 启动时自动从云端获取最新数据
+                fetchFromCloud(); 
             } else {
                 renderTabs();
             }
@@ -183,35 +178,60 @@
             document.getElementById('display').innerText = "已切换到【" + cat + "】，等待复制...";
         }
 
-        async function copyNext() {
+        // 终极安全的复制方法：彻底解决手机端报错锁死按钮的问题
+        function safeFallbackCopy(text, successMsg) {
+            try {
+                let textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.top = '0';
+                textArea.style.left = '0';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.getElementById('display').innerText = successMsg;
+                document.body.removeChild(textArea);
+            } catch (e) {
+                document.getElementById('display').innerText = "⚠️ 自动复制被手机拦截，请手动长按下方文本复制：\n\n" + text;
+            }
+        }
+
+        function copyNext() {
             if (!currentCat || !wenanData[currentCat] || wenanData[currentCat].length === 0) {
                 document.getElementById('display').innerText = "⚠️ 当前分类已空！请拉取或导入。";
                 return;
             }
             
-            // 复制前最好先拉取一次最新云端数据，防止别的手机发过了
-            await fetchFromCloud(); 
-            if(wenanData[currentCat].length === 0) return; // 再次检查
+            // 【先斩后奏】直接从本地提取，0毫秒内完成复制，绝不等待云端
+            let text = wenanData[currentCat].shift();
+            let successMsg = "✅ 已复制并移除：\n\n" + text;
 
-            let text = wenanData[currentCat].shift(); // 删掉第一条
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    let promise = navigator.clipboard.writeText(text);
+                    if(promise !== undefined) {
+                        promise.then(() => {
+                            document.getElementById('display').innerText = successMsg;
+                        }).catch(err => {
+                            safeFallbackCopy(text, successMsg);
+                        });
+                    } else {
+                        safeFallbackCopy(text, successMsg);
+                    }
+                } else {
+                    safeFallbackCopy(text, successMsg);
+                }
+            } catch (err) {
+                safeFallbackCopy(text, successMsg);
+            }
             
-            // 写入剪贴板
-            navigator.clipboard.writeText(text).then(() => {
-                document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
-            }).catch(err => {
-                let textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.getElementById('display').innerText = "✅ 已复制并移除：\n\n" + text;
-                document.body.removeChild(textArea);
-            });
-            
+            // 本地立马刷新UI显示剩余数量
             renderTabs(); 
             updateUI();
             
-            // 后台静默推送删除后的数据到云端
+            // 【静默同步】把扣除后的最新结果通过网络告诉云端
             pushToCloud(); 
         }
 
