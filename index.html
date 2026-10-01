@@ -155,7 +155,6 @@
         }
 
         function saveConfig() {
-            // 强制去除首尾可能存在的空格和换行
             GITHUB_TOKEN = document.getElementById('cfg-token').value.trim().replace(/\s/g, '');
             GIST_ID = document.getElementById('cfg-gist').value.trim().replace(/\s/g, '');
             localStorage.setItem('gh_token', GITHUB_TOKEN);
@@ -187,25 +186,7 @@
             document.getElementById('display').innerText = "已切换到【" + cat + "】，等待复制...";
         }
 
-        function safeFallbackCopy(text, successMsg) {
-            try {
-                let textArea = document.createElement("textarea");
-                textArea.value = text;
-                textArea.style.position = 'fixed';
-                textArea.style.top = '0';
-                textArea.style.left = '0';
-                textArea.style.opacity = '0';
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                document.execCommand('copy');
-                document.getElementById('display').innerText = successMsg;
-                document.body.removeChild(textArea);
-            } catch (e) {
-                document.getElementById('display').innerText = "⚠️ 自动复制拦截，请长按下方文本复制：\n\n" + text;
-            }
-        }
-
+        // 🛡️ 终极暴力复制函数：完美解决部分安卓机不弹窗、静默剪贴板为空的问题
         function copyNext() {
             if (!currentCat || !wenanData[currentCat] || wenanData[currentCat].length === 0) {
                 document.getElementById('display').innerText = "⚠️ 当前分类已空！请拉取或导入。";
@@ -215,23 +196,37 @@
             let text = wenanData[currentCat].shift();
             let successMsg = "✅ 已复制并移除：\n\n" + text;
 
+            // 创建隐藏的文本域进行强制底层复制
+            let textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.width = '2em';
+            textArea.style.height = '2em';
+            textArea.style.padding = '0';
+            textArea.style.border = 'none';
+            textArea.style.outline = 'none';
+            textArea.style.boxShadow = 'none';
+            textArea.style.background = 'transparent';
+            textArea.style.opacity = '0';
+            
+            document.body.appendChild(textArea);
+            
             try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    let promise = navigator.clipboard.writeText(text);
-                    if(promise !== undefined) {
-                        promise.then(() => {
-                            document.getElementById('display').innerText = successMsg;
-                        }).catch(err => {
-                            safeFallbackCopy(text, successMsg);
-                        });
-                    } else {
-                        safeFallbackCopy(text, successMsg);
-                    }
+                textArea.focus();
+                textArea.setSelectionRange(0, textArea.value.length);
+                let successful = document.execCommand('copy');
+                
+                if (successful) {
+                    document.getElementById('display').innerText = successMsg;
                 } else {
-                    safeFallbackCopy(text, successMsg);
+                    document.getElementById('display').innerText = "⚠️ 复制失败，请长按下方文案手动复制：\n\n" + text;
                 }
             } catch (err) {
-                safeFallbackCopy(text, successMsg);
+                document.getElementById('display').innerText = "⚠️ 浏览器权限限制，请长按下方文案手动复制：\n\n" + text;
+            } finally {
+                document.body.removeChild(textArea);
             }
             
             renderTabs(); 
